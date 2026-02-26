@@ -1,0 +1,199 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Структура одного элемента — «Сотрудник» */
+typedef struct {
+    int   id;
+    char  name[50];
+    float salary;
+} Employee;
+
+/* Обёртка динамического массива
+     data     — указатель на выделенный блок памяти
+     size     — количество реальных элементов
+     capacity — сколько слотов выделено */
+typedef struct {
+    Employee *data;
+    int       size;
+    int       capacity;
+} EmployeeArray;
+
+/* Инициализация: обнуляем все поля, данных ещё нет */
+void initArray(EmployeeArray *arr) {
+    arr->data     = NULL;
+    arr->size     = 0;
+    arr->capacity = 0;
+}
+
+/* Вывод одного сотрудника */
+void printEmployee(const Employee *e) {
+    printf("  [%d] %-20s  salary: %.2f\n", e->id, e->name, e->salary);
+}
+
+/* Вывод всего массива с информацией о памяти */
+void printAll(const EmployeeArray *arr) {
+    printf("\n  --- spisok (size=%d, capacity=%d) ---\n",
+           arr->size, arr->capacity);
+    if (arr->size == 0) {
+        printf("  (pysto)\n");
+    } else {
+        for (int i = 0; i < arr->size; i++) {
+            printEmployee(&arr->data[i]);
+        }
+    }
+    printf("  ------------------------------------\n");
+}
+
+/* ЗАДАНИЕ 3 — expandArray
+   Расширяет массив на extraCount слотов
+   Алгоритм (БЕЗ realloc): */
+void expandArray(EmployeeArray *arr, int extraCount) {
+    if (extraCount <= 0) {
+        printf("[expandArray] extraCount Doljen Bit' > 0, propusk.\n");
+        return;
+    }
+
+    int newCapacity = arr->capacity + extraCount;
+
+    /* выделяем новый блок */
+    Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
+    if (newData == NULL) {
+        fprintf(stderr, "Oshibka: malloc ne smog videliti pamyati!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* копируем существующие данные */
+    if (arr->data != NULL && arr->size > 0) {
+        memcpy(newData, arr->data, arr->size * sizeof(Employee));
+    }
+
+    /* освобождаем старый блок */
+    free(arr->data);
+
+    /* обновляем структуру */
+    arr->data     = newData;
+    arr->capacity = newCapacity;
+
+    printf("[expandArray] capacity: %d -> %d  (+%d slotov)\n",
+           newCapacity - extraCount, newCapacity, extraCount);
+}
+
+/* ЗАДАНИЕ 2а + 2б — pushBack
+   Добавляет новый элемент в КОНЕЦ массива
+   Если свободных слотов нет — автоматически расширяет */
+void pushBack(EmployeeArray *arr, Employee e) {
+    /* нет места — расширяем на 1 слот */
+    if (arr->size >= arr->capacity) {
+        expandArray(arr, 1);
+    }
+    arr->data[arr->size] = e;
+    arr->size++;
+    printf("[pushBack] dobavlen \"%s\"  (size=%d)\n", e.name, arr->size);
+}
+
+/* ЗАДАНИЕ 2в — popBack
+   Удаляет СТРОГО ПОСЛЕДНИЙ элемент и сразу
+   уменьшает выделенную память (без realloc) */
+void popBack(EmployeeArray *arr) {
+    if (arr->size == 0) {
+        printf("[popBack] massiv pust, nechego udalyati.\n");
+        return;
+    }
+
+    printf("[popBack] udalyaem \"%s\"\n", arr->data[arr->size - 1].name);
+    arr->size--;                        /* логически убираем последний */
+
+    int newCapacity = arr->size;        /* минимальный нужный размер   */
+
+    if (newCapacity == 0) {
+        /* массив опустел — просто освобождаем блок */
+        free(arr->data);
+        arr->data     = NULL;
+        arr->capacity = 0;
+    } else {
+        /* выделяем уменьшенный блок, копируем, освобождаем старый */
+        Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
+        if (newData == NULL) {
+            fprintf(stderr, "Oshibka: malloc ne smog videliti pamyati!\n");
+            exit(EXIT_FAILURE);
+        }
+        memcpy(newData, arr->data, newCapacity * sizeof(Employee));
+        free(arr->data);
+        arr->data     = newData;
+        arr->capacity = newCapacity;
+    }
+
+    printf("[popBack] capacity umenishen do %d\n", arr->capacity);
+}
+
+/* ЗАДАНИЕ 2г + ЗАДАНИЕ 4 — freeArray
+   Ручной механизм освобождения ВСЕЙ памяти.
+   Используется как в середине программы (ручная очистка),
+   так и перед завершением программы (финальная очистка). */
+void freeArray(EmployeeArray *arr) {
+    free(arr->data);      /* освобождаем весь выделенный блок */
+    arr->data     = NULL;
+    arr->size     = 0;
+    arr->capacity = 0;
+    printf("[freeArray] vsya pamyati osvobojdena. size=0, capacity=0\n");
+}
+
+/* MAIN — демонстрация всех возможностей */
+int main(void) {
+    EmployeeArray arr;
+    initArray(&arr);
+
+    printf("========================================\n");
+    printf("  Dinamicheskiy massiv sotrudnikov      \n");
+    printf("========================================\n\n");
+
+    // --- FEATURE: insert at the end + auto-expand ---
+    printf(">> Vstavka v konets (pushBack):\n");
+    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
+    pushBack(&arr, (Employee){1, "Alisa Alisova",  55000.0f});
+    pushBack(&arr, (Employee){2, "Bob Bobov",       48000.0f});
+    pushBack(&arr, (Employee){3, "Coral Coralov",     62000.0f});
+    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
+    printAll(&arr);
+
+    // --- FEATURE: expand array by N slots manually ---
+    printf(">> Rasshirit massiv na 3 dopolnitelnyh yacheyki (expandArray):\n");
+    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
+    expandArray(&arr, 3);
+    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
+    printAll(&arr);
+
+    pushBack(&arr, (Employee){4, "David Davidov",    71000.0f});
+    pushBack(&arr, (Employee){5, "Alibert Alibertov ",   59000.0f});
+    printAll(&arr);
+
+    // --- FEATURE: remove strictly last element + shrink ---
+    printf(">> Udalit posledniy element (popBack):\n");
+    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
+    popBack(&arr);
+    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
+    printAll(&arr);
+
+    popBack(&arr);
+    printAll(&arr);
+
+    // --- FEATURE: manual memory release ---
+    printf(">> Ruchnoe osvobozhdenie pamyati (freeArray):\n");
+    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
+    freeArray(&arr);
+    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
+    printAll(&arr);
+
+    // array works again after free
+    pushBack(&arr, (Employee){10, "Frank Lee",  45000.0f});
+    pushBack(&arr, (Employee){11, "Grace Kim",  53000.0f});
+    printAll(&arr);
+
+    // final cleanup before exit
+    printf(">> Finalnaya ochistka pered zaversheniem exit:\n");
+    freeArray(&arr);
+
+    printf("\nGotovo. Utechek pamyati net..\n");
+    return 0;
+}
