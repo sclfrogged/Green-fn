@@ -2,198 +2,208 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Структура одного элемента — «Сотрудник» */
+#define MAX_ADDR 256
+
 typedef struct {
-    int   id;
-    char  name[50];
-    float salary;
-} Employee;
+    char address[MAX_ADDR];
+    int rooms;
+    float area;
+    float rent;
+} Apartment;
 
-/* Обёртка динамического массива
-     data     — указатель на выделенный блок памяти
-     size     — количество реальных элементов
-     capacity — сколько слотов выделено */
 typedef struct {
-    Employee *data;
-    int       size;
-    int       capacity;
-} EmployeeArray;
+    Apartment *data;
+    int size;
+} ApartmentArray;
 
-/* Инициализация: обнуляем все поля, данных ещё нет */
-void initArray(EmployeeArray *arr) {
-    arr->data     = NULL;
-    arr->size     = 0;
-    arr->capacity = 0;
+/* Inicializaciya pustogo massiva */
+void init_array(ApartmentArray *arr) {
+    arr->data = NULL;
+    arr->size = 0;
 }
 
-/* Вывод одного сотрудника */
-void printEmployee(const Employee *e) {
-    printf("  [%d] %-20s  salary: %.2f\n", e->id, e->name, e->salary);
-}
+/* Rasshirenie massiva na count elementov
+   BEZ realloc: vydelyaem novuyu oblast, kopiruyem, osvobozhdaem staruyu */
+int expand_array(ApartmentArray *arr, int count) {
+    if (count <= 0) return 0;
 
-/* Вывод всего массива с информацией о памяти */
-void printAll(const EmployeeArray *arr) {
-    printf("\n  --- spisok (size=%d, capacity=%d) ---\n",
-           arr->size, arr->capacity);
-    if (arr->size == 0) {
-        printf("  (pysto)\n");
-    } else {
-        for (int i = 0; i < arr->size; i++) {
-            printEmployee(&arr->data[i]);
-        }
-    }
-    printf("  ------------------------------------\n");
-}
-
-/* ЗАДАНИЕ 3 — expandArray
-   Расширяет массив на extraCount слотов
-   Алгоритм (БЕЗ realloc): */
-void expandArray(EmployeeArray *arr, int extraCount) {
-    if (extraCount <= 0) {
-        printf("[expandArray] extraCount Doljen Bit' > 0, propusk.\n");
-        return;
+    int new_size = arr->size + count;
+    Apartment *new_data = (Apartment *)malloc(new_size * sizeof(Apartment));
+    if (!new_data) {
+        printf("Oshibka: ne udalos vydelit pamyat!\n");
+        return 0;
     }
 
-    int newCapacity = arr->capacity + extraCount;
-
-    /* выделяем новый блок */
-    Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
-    if (newData == NULL) {
-        fprintf(stderr, "Oshibka: malloc ne smog videliti pamyati!\n");
-        exit(EXIT_FAILURE);
+    /* Kopiruyem starye dannye v novuyu oblast */
+    for (int i = 0; i < arr->size; i++) {
+        new_data[i] = arr->data[i];
     }
 
-    /* копируем существующие данные */
-    if (arr->data != NULL && arr->size > 0) {
-        memcpy(newData, arr->data, arr->size * sizeof(Employee));
-    }
-
-    /* освобождаем старый блок */
+    /* Osvobozhdaem staruyu oblast pamyati */
     free(arr->data);
 
-    /* обновляем структуру */
-    arr->data     = newData;
-    arr->capacity = newCapacity;
-
-    printf("[expandArray] capacity: %d -> %d  (+%d slotov)\n",
-           newCapacity - extraCount, newCapacity, extraCount);
+    arr->data = new_data;
+    arr->size = new_size;
+    return 1;
 }
 
-/* ЗАДАНИЕ 2а + 2б — pushBack
-   Добавляет новый элемент в КОНЕЦ массива
-   Если свободных слотов нет — автоматически расширяет */
-void pushBack(EmployeeArray *arr, Employee e) {
-    /* нет места — расширяем на 1 слот */
-    if (arr->size >= arr->capacity) {
-        expandArray(arr, 1);
-    }
-    arr->data[arr->size] = e;
-    arr->size++;
-    printf("[pushBack] dobavlen \"%s\"  (size=%d)\n", e.name, arr->size);
+/* Dobavlenie novogo elementa v konec massiva */
+int push_back(ApartmentArray *arr, Apartment apt) {
+    /* Rasshiryaem massiv na 1 element */
+    if (!expand_array(arr, 1)) return 0;
+
+    /* Vstavlyaem v poslednyuyu poziciyu */
+    arr->data[arr->size - 1] = apt;
+    return 1;
 }
 
-/* ЗАДАНИЕ 2в — popBack
-   Удаляет СТРОГО ПОСЛЕДНИЙ элемент и сразу
-   уменьшает выделенную память (без realloc) */
-void popBack(EmployeeArray *arr) {
+/* Umenshenie massiva: udalenie poslednego elementa */
+int pop_back(ApartmentArray *arr) {
     if (arr->size == 0) {
-        printf("[popBack] massiv pust, nechego udalyati.\n");
+        printf("Massiv pust. Nechego udalyat.\n");
+        return 0;
+    }
+
+    int new_size = arr->size - 1;
+
+    if (new_size == 0) {
+        free(arr->data);
+        arr->data = NULL;
+        arr->size = 0;
+        printf("Posledniy element udalyon. Massiv teper pust.\n");
+        return 1;
+    }
+
+    /* Vydelyaem novuyu oblast menshego razmera */
+    Apartment *new_data = (Apartment *)malloc(new_size * sizeof(Apartment));
+    if (!new_data) {
+        printf("Oshibka: ne udalos vydelit pamyat!\n");
+        return 0;
+    }
+
+    /* Kopiruyem vse krome poslednego */
+    for (int i = 0; i < new_size; i++) {
+        new_data[i] = arr->data[i];
+    }
+
+    /* Osvobozhdaem staruyu pamyat */
+    free(arr->data);
+
+    arr->data = new_data;
+    arr->size = new_size;
+    return 1;
+}
+
+/* Ruchnoe osvobozhdenie vsey pamyati i ochistka spiska */
+void clear_array(ApartmentArray *arr) {
+    if (arr->data != NULL) {
+        free(arr->data);
+        arr->data = NULL;
+    }
+    arr->size = 0;
+    printf("Pamyat osvobozhdena. Spisok ochishchen.\n");
+}
+
+/* Vyvod odnoy kvartiry */
+void print_apartment(const Apartment *apt, int index) {
+    printf("--- Kvartira #%d ---\n", index + 1);
+    printf("  Adres        : %s\n", apt->address);
+    printf("  Komnat       : %d\n", apt->rooms);
+    printf("  Ploshchad    : %.2f kv.m\n", apt->area);
+    printf("  Stoimost     : %.2f rub./mes.\n", apt->rent);
+}
+
+/* Vyvod vsego massiva */
+void print_all(const ApartmentArray *arr) {
+    if (arr->size == 0) {
+        printf("Spisok kvartir pust.\n");
         return;
     }
-
-    printf("[popBack] udalyaem \"%s\"\n", arr->data[arr->size - 1].name);
-    arr->size--;                        /* логически убираем последний */
-
-    int newCapacity = arr->size;        /* минимальный нужный размер   */
-
-    if (newCapacity == 0) {
-        /* массив опустел — просто освобождаем блок */
-        free(arr->data);
-        arr->data     = NULL;
-        arr->capacity = 0;
-    } else {
-        /* выделяем уменьшенный блок, копируем, освобождаем старый */
-        Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
-        if (newData == NULL) {
-            fprintf(stderr, "Oshibka: malloc ne smog videliti pamyati!\n");
-            exit(EXIT_FAILURE);
-        }
-        memcpy(newData, arr->data, newCapacity * sizeof(Employee));
-        free(arr->data);
-        arr->data     = newData;
-        arr->capacity = newCapacity;
+    printf("\n=== Spisok kvartir (%d sht.) ===\n", arr->size);
+    for (int i = 0; i < arr->size; i++) {
+        print_apartment(&arr->data[i], i);
     }
-
-    printf("[popBack] capacity umenishen do %d\n", arr->capacity);
 }
 
-/* ЗАДАНИЕ 2г + ЗАДАНИЕ 4 — freeArray
-   Ручной механизм освобождения ВСЕЙ памяти.
-   Используется как в середине программы (ручная очистка),
-   так и перед завершением программы (финальная очистка). */
-void freeArray(EmployeeArray *arr) {
-    free(arr->data);      /* освобождаем весь выделенный блок */
-    arr->data     = NULL;
-    arr->size     = 0;
-    arr->capacity = 0;
-    printf("[freeArray] vsya pamyati osvobojdena. size=0, capacity=0\n");
+/* Vvod kvartiry s klaviatury */
+Apartment input_apartment() {
+    Apartment apt;
+
+    printf("Vvedite adres: ");
+    fgets(apt.address, MAX_ADDR, stdin);
+    apt.address[strcspn(apt.address, "\n")] = '\0';
+
+    printf("Vvedite kolichestvo komnat: ");
+    scanf("%d", &apt.rooms);
+
+    printf("Vvedite ploshchad (kv.m): ");
+    scanf("%f", &apt.area);
+
+    printf("Vvedite stoimost arendy (rub./mes.): ");
+    scanf("%f", &apt.rent);
+
+    /* Ochishchaem bufer posle scanf */
+    while (getchar() != '\n');
+    return apt;
 }
 
-/* MAIN — демонстрация всех возможностей */
-int main(void) {
-    EmployeeArray arr;
-    initArray(&arr);
+void print_menu() {
+    printf("\n========= MENYU =========\n");
+    printf("1. Dobavit kvartiru v konec\n");
+    printf("2. Udalit poslednyuyu kvartiru\n");
+    printf("3. Rasshirit massiv (pustye sloty)\n");
+    printf("4. Pokazat vse kvartiry\n");
+    printf("5. Ochistit spisok i osvobodic pamyat\n");
+    printf("0. Vyhod\n");
+    printf("Vybor: ");
+}
 
-    printf("========================================\n");
-    printf("  Dinamicheskiy massiv sotrudnikov      \n");
-    printf("========================================\n\n");
+int main() {
+    ApartmentArray arr;
+    init_array(&arr);
 
-    // --- FEATURE: insert at the end + auto-expand ---
-    printf(">> Vstavka v konets (pushBack):\n");
-    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
-    pushBack(&arr, (Employee){1, "Alisa Alisova",  55000.0f});
-    pushBack(&arr, (Employee){2, "Bob Bobov",       48000.0f});
-    pushBack(&arr, (Employee){3, "Coral Coralov",     62000.0f});
-    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
-    printAll(&arr);
+    int choice;
+    do {
+        print_menu();
+        scanf("%d", &choice);
+        while (getchar() != '\n');
 
-    // --- FEATURE: expand array by N slots manually ---
-    printf(">> Rasshirit massiv na 3 dopolnitelnyh yacheyki (expandArray):\n");
-    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
-    expandArray(&arr, 3);
-    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
-    printAll(&arr);
+        switch (choice) {
+            case 1: {
+                Apartment apt = input_apartment();
+                if (push_back(&arr, apt))
+                    printf("Kvartira dobavlena. Razmer massiva: %d\n", arr.size);
+                break;
+            }
+            case 2: {
+                if (pop_back(&arr))
+                    printf("Poslednyaya kvartira udalena. Razmer massiva: %d\n", arr.size);
+                break;
+            }
+            case 3: {
+                int count;
+                printf("Na skolko elementov rasshirit massiv? ");
+                scanf("%d", &count);
+                while (getchar() != '\n');
+                if (expand_array(&arr, count))
+                    printf("Massiv rasshiren. Novyy razmer: %d\n", arr.size);
+                break;
+            }
+            case 4:
+                print_all(&arr);
+                break;
+            case 5:
+                clear_array(&arr);
+                break;
+            case 0:
+                printf("Zavershenie programmy...\n");
+                break;
+            default:
+                printf("Nevernyy vybor. Poprobuite snova.\n");
+        }
+    } while (choice != 0);
 
-    pushBack(&arr, (Employee){4, "David Davidov",    71000.0f});
-    pushBack(&arr, (Employee){5, "Alibert Alibertov ",   59000.0f});
-    printAll(&arr);
-
-    // --- FEATURE: remove strictly last element + shrink ---
-    printf(">> Udalit posledniy element (popBack):\n");
-    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
-    popBack(&arr);
-    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
-    printAll(&arr);
-
-    popBack(&arr);
-    printAll(&arr);
-
-    // --- FEATURE: manual memory release ---
-    printf(">> Ruchnoe osvobozhdenie pamyati (freeArray):\n");
-    printf("   Before: size=%d, capacity=%d\n", arr.size, arr.capacity);
-    freeArray(&arr);
-    printf("   After:  size=%d, capacity=%d\n\n", arr.size, arr.capacity);
-    printAll(&arr);
-
-    // array works again after free
-    pushBack(&arr, (Employee){10, "Frank Lee",  45000.0f});
-    pushBack(&arr, (Employee){11, "Grace Kim",  53000.0f});
-    printAll(&arr);
-
-    // final cleanup before exit
-    printf(">> Finalnaya ochistka pered zaversheniem exit:\n");
-    freeArray(&arr);
-
-    printf("\nGotovo. Utechek pamyati net..\n");
+    /* Osvobozhdaem pamyat pered zaversheniem */
+    clear_array(&arr);
     return 0;
 }
