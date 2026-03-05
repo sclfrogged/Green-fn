@@ -1,151 +1,180 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define SIZE 10
-#define STR_LEN 100
+typedef struct {
+    int   id;
+    char  name[50];
+    float salary;
+} Employee;
 
-struct Project {
-    char name[STR_LEN];
-    char description[STR_LEN];
-    char status[STR_LEN];      // vipolnen / v processe
-    char startDate[STR_LEN];
-    char endDate[STR_LEN];
-};
+typedef struct {
+    Employee *data;
+    int       size;
+    int       capacity;
+} EmployeeArray;
 
-void inputProjects(struct Project projects[], int count) {
-    for (int i = 0; i < count; i++) {
-        printf("\nProekt #%d\n", i);
-
-        printf("Nazvanie: ");
-        fgets(projects[i].name, STR_LEN, stdin);
-        projects[i].name[strcspn(projects[i].name, "\n")] = 0;
-
-        printf("Opisanie: ");
-        fgets(projects[i].description, STR_LEN, stdin);
-        projects[i].description[strcspn(projects[i].description, "\n")] = 0;
-
-        printf("Status (vipolnen / v processe): ");
-        fgets(projects[i].status, STR_LEN, stdin);
-        projects[i].status[strcspn(projects[i].status, "\n")] = 0;
-
-        printf("Data nachala: ");
-        fgets(projects[i].startDate, STR_LEN, stdin);
-        projects[i].startDate[strcspn(projects[i].startDate, "\n")] = 0;
-
-        printf("Data zaversheniya: ");
-        fgets(projects[i].endDate, STR_LEN, stdin);
-        projects[i].endDate[strcspn(projects[i].endDate, "\n")] = 0;
-    }
+void initArray(EmployeeArray *arr) {
+    arr->data     = NULL;
+    arr->size     = 0;
+    arr->capacity = 0;
 }
 
-void printProjects(struct Project projects[], int count) {
-    for (int i = 0; i < count; i++) {
-        printf("\nIndex: %d\n", i);
-        printf("Nazvanie: %s\n", projects[i].name);
-        printf("Opisanie: %s\n", projects[i].description);
-        printf("Status: %s\n", projects[i].status);
-        printf("Data nachala: %s\n", projects[i].startDate);
-        printf("Data zaversheniya: %s\n", projects[i].endDate);
-    }
+void printEmployee(const Employee *e) {
+    printf("  [%d] %-20s  salary: %.2f\n", e->id, e->name, e->salary);
 }
 
-void editProject(struct Project *project) {
-    int choice;
-    printf("\nChto redaktirovat?\n");
-    printf("1. Nazvanie\n");
-    printf("2. Opisanie\n");
-    printf("3. Status\n");
-    printf("4. Data nachala\n");
-    printf("5. Data zaversheniya\n");
-    printf("Vibor: ");
-    scanf("%d", &choice);
-    getchar();
-
-    switch (choice) {
-        case 1:
-            printf("Novoe nazvanie: ");
-            fgets(project->name, STR_LEN, stdin);
-            project->name[strcspn(project->name, "\n")] = 0;
-            break;
-        case 2:
-            printf("Novoe opisanie: ");
-            fgets(project->description, STR_LEN, stdin);
-            project->description[strcspn(project->description, "\n")] = 0;
-            break;
-        case 3:
-            printf("Noviy status: ");
-            fgets(project->status, STR_LEN, stdin);
-            project->status[strcspn(project->status, "\n")] = 0;
-            break;
-        case 4:
-            printf("Novaya data nachala: ");
-            fgets(project->startDate, STR_LEN, stdin);
-            project->startDate[strcspn(project->startDate, "\n")] = 0;
-            break;
-        case 5:
-            printf("Novaya data zaversheniya: ");
-            fgets(project->endDate, STR_LEN, stdin);
-            project->endDate[strcspn(project->endDate, "\n")] = 0;
-            break;
-        default:
-            printf("Neverniy vibor\n");
-    }
-}
-
-void searchProject(struct Project projects[], int count, char key[]) {
-    int found = 0;
-
-    for (int i = 0; i < count; i++) {
-        if (strcmp(projects[i].name, key) == 0) {
-            printf("\nProekt nayden:\n");
-            printf("Opisanie: %s\n", projects[i].description);
-            printf("Status: %s\n", projects[i].status);
-            printf("Data nachala: %s\n", projects[i].startDate);
-            printf("Data zaversheniya: %s\n", projects[i].endDate);
-            found = 1;
+void printAll(const EmployeeArray *arr) {
+    printf("  --- list (size=%d, capacity=%d) ---\n", arr->size, arr->capacity);
+    if (arr->size == 0) {
+        printf("  (empty)\n");
+    } else {
+        for (int i = 0; i < arr->size; i++) {
+            printEmployee(&arr->data[i]);
         }
     }
-
-    if (!found) {
-        printf("Proekt ne nayden\n");
-    }
+    printf("  -----------------------------------\n\n");
 }
 
-int main() {
-    struct Project projects[SIZE];
-    int count;
-
-    printf("Vvedite kolichestvo proektov (do 10): ");
-    scanf("%d", &count);
-    getchar();
-
-    if (count > SIZE) {
-        printf("Slishkom mnogo proektov\n");
-        return 1;
+void expandArray(EmployeeArray *arr, int extraCount) {
+    if (extraCount <= 0) {
+        printf("[expandArray] extraCount must be > 0, skipping.\n");
+        return;
     }
 
-    inputProjects(projects, count);
+    int newCapacity = arr->capacity + extraCount;
 
-    printf("\nSpisok proektov:");
-    printProjects(projects, count);
+    Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
+    if (newData == NULL) {
+        fprintf(stderr, "Error: malloc failed!\n");
+        exit(EXIT_FAILURE);
+    }
 
-    int index;
-    printf("\nVvedite index proekta dlya redaktirovaniya: ");
-    scanf("%d", &index);
-    getchar();
+    if (arr->data != NULL && arr->size > 0) {
+        memcpy(newData, arr->data, arr->size * sizeof(Employee));
+    }
 
-    if (index >= 0 && index < count) {
-        editProject(&projects[index]);
+    free(arr->data);
+
+    arr->data     = newData;
+    arr->capacity = newCapacity;
+
+    printf("[expandArray] capacity: %d -> %d  (+%d slots)\n",
+           newCapacity - extraCount, newCapacity, extraCount);
+}
+
+void pushBack(EmployeeArray *arr, Employee e) {
+    if (arr->size >= arr->capacity) {
+        expandArray(arr, 1);
+    }
+    arr->data[arr->size] = e;
+    arr->size++;
+    printf("[pushBack] added \"%s\"  (size=%d)\n", e.name, arr->size);
+}
+
+void popBack(EmployeeArray *arr) {
+    if (arr->size == 0) {
+        printf("[popBack] array is empty, nothing to remove.\n");
+        return;
+    }
+
+    printf("[popBack] removing \"%s\"\n", arr->data[arr->size - 1].name);
+    arr->size--;
+
+    int newCapacity = arr->size;
+
+    if (newCapacity == 0) {
+        free(arr->data);
+        arr->data     = NULL;
+        arr->capacity = 0;
     } else {
-        printf("Neverniy index\n");
+        Employee *newData = (Employee *)malloc(newCapacity * sizeof(Employee));
+        if (newData == NULL) {
+            fprintf(stderr, "Error: malloc failed!\n");
+            exit(EXIT_FAILURE);
+        }
+        memcpy(newData, arr->data, newCapacity * sizeof(Employee));
+        free(arr->data);
+        arr->data     = newData;
+        arr->capacity = newCapacity;
     }
 
-    char searchName[STR_LEN];
-    printf("\nVvedite nazvanie proekta dlya poiska: ");
-    fgets(searchName, STR_LEN, stdin);
-    searchName[strcspn(searchName, "\n")] = 0;
+    printf("[popBack] capacity shrunk to %d\n", arr->capacity);
+}
 
-    searchProject(projects, count, searchName);
+void freeArray(EmployeeArray *arr) {
+    free(arr->data);
+    arr->data     = NULL;
+    arr->size     = 0;
+    arr->capacity = 0;
+    printf("[freeArray] all memory released. size=0, capacity=0\n");
+}
 
+/*
+int main(void) {
+    EmployeeArray arr;
+    initArray(&arr);
+
+    printf("========================================\n");
+    printf("   Dynamic Employee Array — Demo        \n");
+    printf("========================================\n\n");
+
+
+       FEATURE 1: Insert new element at the END
+       pushBack() adds to the end of the array.
+       When there is no room — expandArray() is
+       called automatically before inserting.
+    printf("FEATURE 1: Insert element at the end (pushBack)\n");
+    printf("------------------------------------------------\n");
+    pushBack(&arr, (Employee){1, "Alice Johnson",  55000.0f});
+    pushBack(&arr, (Employee){2, "Bob Smith",       48000.0f});
+    pushBack(&arr, (Employee){3, "Carol White",     62000.0f});
+    printAll(&arr);
+
+
+       FEATURE 2: Expand array by N slots
+       expandArray() allocates a brand-new block
+       (old size + extra), copies all data into it,
+       then frees the old block. No realloc used.
+    printf("FEATURE 2: Expand array capacity by 3 slots (expandArray)\n");
+    printf("----------------------------------------------------------\n");
+    expandArray(&arr, 3);
+    printAll(&arr);
+
+    printf("  Adding 2 more employees into pre-expanded slots:\n");
+    pushBack(&arr, (Employee){4, "David Brown",    71000.0f});
+    pushBack(&arr, (Employee){5, "Eva Martinez",   59000.0f});
+    printAll(&arr);
+
+
+       FEATURE 3: Remove STRICTLY the last element
+       popBack() drops the last item, then creates
+       a smaller block and frees the old one.
+    printf("FEATURE 3: Remove last element and shrink memory (popBack)\n");
+    printf("-----------------------------------------------------------\n");
+    popBack(&arr);
+    printAll(&arr);
+    popBack(&arr);
+    printAll(&arr);
+
+       FEATURE 4: Manual memory release
+       freeArray() can be called at any point to
+       release all memory and reset the array.
+    printf("FEATURE 4: Manual memory release (freeArray)\n");
+    printf("---------------------------------------------\n");
+    freeArray(&arr);
+    printAll(&arr);
+
+    printf("  Array re-used after manual release:\n");
+    pushBack(&arr, (Employee){10, "Frank Lee",  45000.0f});
+    pushBack(&arr, (Employee){11, "Grace Kim",  53000.0f});
+    printAll(&arr);
+
+    printf("Final cleanup before program exit\n");
+    printf("---------------------------------\n");
+    freeArray(&arr);
+
+    printf("Program finished. No memory leaks.\n");
     return 0;
 }
+*/
