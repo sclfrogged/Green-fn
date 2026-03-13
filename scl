@@ -2,208 +2,370 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_ADDR 256
+#define MAX_ADDRESS_LEN 200
 
+/*STRUCTURE*/
 typedef struct {
-    char address[MAX_ADDR];
-    int rooms;
+    char  address[MAX_ADDRESS_LEN];
+    int   rooms;
     float area;
     float rent;
 } Apartment;
 
+/*DYNAMIC ARRAY*/
 typedef struct {
-    Apartment *data;
-    int size;
+    Apartment *data;     /* pointer to memory block  */
+    int        count;    /* number of elements used  */
+    int        capacity; /* number of slots allocated */
 } ApartmentArray;
 
-/* Inicializaciya pustogo massiva */
-void init_array(ApartmentArray *arr) {
-    arr->data = NULL;
-    arr->size = 0;
+/* Initialize an empty array */
+void array_init(ApartmentArray *arr) {
+    arr->data     = NULL;
+    arr->count    = 0;
+    arr->capacity = 0;
 }
 
-/* Rasshirenie massiva na count elementov
-   BEZ realloc: vydelyaem novuyu oblast, kopiruyem, osvobozhdaem staruyu */
-int expand_array(ApartmentArray *arr, int count) {
-    if (count <= 0) return 0;
+/*
+ * Expand the array by extra_slots slots.
+ * Does NOT use realloc - allocates a new block,
+ * copies data, then frees the old block.
+ */
+int array_expand(ApartmentArray *arr, int extra_slots) {
+    if (extra_slots <= 0) return 1;
 
-    int new_size = arr->size + count;
-    Apartment *new_data = (Apartment *)malloc(new_size * sizeof(Apartment));
+    int new_capacity = arr->capacity + extra_slots;
+
+    /* Allocate new memory block */
+    Apartment *new_data = (Apartment *)malloc(sizeof(Apartment) * new_capacity);
     if (!new_data) {
-        printf("Oshibka: ne udalos vydelit pamyat!\n");
+        printf("Error: failed to allocate memory.\n");
         return 0;
     }
 
-    /* Kopiruyem starye dannye v novuyu oblast */
-    for (int i = 0; i < arr->size; i++) {
-        new_data[i] = arr->data[i];
-    }
+    /* Copy existing data into new block */
+    if (arr->data && arr->count > 0)
+        memcpy(new_data, arr->data, sizeof(Apartment) * arr->count);
 
-    /* Osvobozhdaem staruyu oblast pamyati */
+    /* Free the old block */
     free(arr->data);
 
-    arr->data = new_data;
-    arr->size = new_size;
+    arr->data     = new_data;
+    arr->capacity = new_capacity;
     return 1;
 }
 
-/* Dobavlenie novogo elementa v konec massiva */
-int push_back(ApartmentArray *arr, Apartment apt) {
-    /* Rasshiryaem massiv na 1 element */
-    if (!expand_array(arr, 1)) return 0;
-
-    /* Vstavlyaem v poslednyuyu poziciyu */
-    arr->data[arr->size - 1] = apt;
+/* Add element to the end (expands automatically if needed) */
+int array_push(ApartmentArray *arr, const Apartment *apt) {
+    if (arr->count >= arr->capacity) {
+        if (!array_expand(arr, 1)) return 0;
+    }
+    arr->data[arr->count] = *apt;
+    arr->count++;
     return 1;
 }
 
-/* Umenshenie massiva: udalenie poslednego elementa */
-int pop_back(ApartmentArray *arr) {
-    if (arr->size == 0) {
-        printf("Massiv pust. Nechego udalyat.\n");
+/*
+ * Remove the last element and shrink the memory block.
+ * Again without realloc - copies into a smaller new block,
+ * then frees the old one.
+ */
+int array_pop(ApartmentArray *arr) {
+    if (arr->count == 0) {
+        printf(" Array is empty - nothing to remove.\n");
         return 0;
     }
+    arr->count--;
+    int new_capacity = arr->count;
 
-    int new_size = arr->size - 1;
-
-    if (new_size == 0) {
+    if (new_capacity == 0) {
         free(arr->data);
-        arr->data = NULL;
-        arr->size = 0;
-        printf("Posledniy element udalyon. Massiv teper pust.\n");
+        arr->data     = NULL;
+        arr->capacity = 0;
         return 1;
     }
 
-    /* Vydelyaem novuyu oblast menshego razmera */
-    Apartment *new_data = (Apartment *)malloc(new_size * sizeof(Apartment));
+    Apartment *new_data = (Apartment *)malloc(sizeof(Apartment) * new_capacity);
     if (!new_data) {
-        printf("Oshibka: ne udalos vydelit pamyat!\n");
-        return 0;
+        printf("Warning: could not shrink memory block.\n");
+        arr->capacity = new_capacity;
+        return 1;
     }
-
-    /* Kopiruyem vse krome poslednego */
-    for (int i = 0; i < new_size; i++) {
-        new_data[i] = arr->data[i];
-    }
-
-    /* Osvobozhdaem staruyu pamyat */
+    memcpy(new_data, arr->data, sizeof(Apartment) * new_capacity);
     free(arr->data);
-
-    arr->data = new_data;
-    arr->size = new_size;
+    arr->data     = new_data;
+    arr->capacity = new_capacity;
     return 1;
 }
 
-/* Ruchnoe osvobozhdenie vsey pamyati i ochistka spiska */
-void clear_array(ApartmentArray *arr) {
-    if (arr->data != NULL) {
-        free(arr->data);
-        arr->data = NULL;
-    }
-    arr->size = 0;
-    printf("Pamyat osvobozhdena. Spisok ochishchen.\n");
+/* Clear the entire list and free all memory */
+void array_free(ApartmentArray *arr) {
+    free(arr->data);
+    arr->data     = NULL;
+    arr->count    = 0;
+    arr->capacity = 0;
+    printf("Memory freed. List cleared.\n");
 }
 
-/* Vyvod odnoy kvartiry */
-void print_apartment(const Apartment *apt, int index) {
-    printf("--- Kvartira #%d ---\n", index + 1);
-    printf("  Adres        : %s\n", apt->address);
-    printf("  Komnat       : %d\n", apt->rooms);
-    printf("  Ploshchad    : %.2f kv.m\n", apt->area);
-    printf("  Stoimost     : %.2f rub./mes.\n", apt->rent);
-}
-
-/* Vyvod vsego massiva */
-void print_all(const ApartmentArray *arr) {
-    if (arr->size == 0) {
-        printf("Spisok kvartir pust.\n");
-        return;
-    }
-    printf("\n=== Spisok kvartir (%d sht.) ===\n", arr->size);
-    for (int i = 0; i < arr->size; i++) {
-        print_apartment(&arr->data[i], i);
+/*INPUT HELPERS*/
+void input_string(const char *prompt, char *buf, int max_len) {
+    printf("%s", prompt);
+    fflush(stdout);
+    if (fgets(buf, max_len, stdin)) {
+        size_t n = strlen(buf);
+        if (n > 0 && buf[n - 1] == '\n') buf[n - 1] = '\0';
     }
 }
 
-/* Vvod kvartiry s klaviatury */
-Apartment input_apartment() {
-    Apartment apt;
-
-    printf("Vvedite adres: ");
-    fgets(apt.address, MAX_ADDR, stdin);
-    apt.address[strcspn(apt.address, "\n")] = '\0';
-
-    printf("Vvedite kolichestvo komnat: ");
-    scanf("%d", &apt.rooms);
-
-    printf("Vvedite ploshchad (kv.m): ");
-    scanf("%f", &apt.area);
-
-    printf("Vvedite stoimost arendy (rub./mes.): ");
-    scanf("%f", &apt.rent);
-
-    /* Ochishchaem bufer posle scanf */
-    while (getchar() != '\n');
-    return apt;
+int input_int(const char *prompt) {
+    int  v;
+    char line[64];
+    while (1) {
+        printf("%s", prompt);
+        fflush(stdout);
+        if (fgets(line, sizeof(line), stdin))
+            if (sscanf(line, "%d", &v) == 1) return v;
+        printf("Invalid input. Please enter an integer.\n");
+    }
 }
 
-void print_menu() {
-    printf("\n========= MENYU =========\n");
-    printf("1. Dobavit kvartiru v konec\n");
-    printf("2. Udalit poslednyuyu kvartiru\n");
-    printf("3. Rasshirit massiv (pustye sloty)\n");
-    printf("4. Pokazat vse kvartiry\n");
-    printf("5. Ochistit spisok i osvobodic pamyat\n");
-    printf("0. Vyhod\n");
-    printf("Vybor: ");
+float input_float(const char *prompt) {
+    float v;
+    char  line[64];
+    while (1) {
+        printf("%s", prompt);
+        fflush(stdout);
+        if (fgets(line, sizeof(line), stdin))
+            if (sscanf(line, "%f", &v) == 1) return v;
+        printf("Invalid input. Please enter a number.\n");
+    }
 }
 
-int main() {
-    ApartmentArray arr;
-    init_array(&arr);
+/* Fill apartment fields from keyboard */
+void input_apartment(Apartment *a) {
+    input_string("  Address:          ", a->address, MAX_ADDRESS_LEN);
+    a->rooms = input_int  ("Number of rooms:");
+    a->area  = input_float("Area (sqm):");
+    a->rent  = input_float("Rent (per month):");
+}
 
-    int choice;
-    do {
-        print_menu();
-        scanf("%d", &choice);
-        while (getchar() != '\n');
+/*DISPLAY*/
+void print_apartment(int index, const Apartment *a) {
+    printf("| Apartment #%-3d                                |\n", index);
+    printf("| Address: %-38s|\n", a->address);
+    printf("| Rooms:   %-38d|\n", a->rooms);
+    printf("| Area:    %-34.2f sqm |\n", a->area);
+    printf("| Rent:    %-33.2f $   |\n", a->rent);
+}
+
+void display_all(const ApartmentArray *arr) {
+    printf("\nApartment List (count: %d, capacity: %d)\n",
+           arr->count, arr->capacity);
+    if (arr->count == 0) { printf("  (list is empty)\n\n"); return; }
+    for (int i = 0; i < arr->count; i++)
+        print_apartment(i, &arr->data[i]);
+    printf("\n");
+}
+
+/*MENU ACTIONS*/
+
+/* Add one apartment to the end */
+void menu_add_to_end(ApartmentArray *arr) {
+    printf("\nAdd Apartment to End\n");
+    Apartment a;
+    input_apartment(&a);
+    if (array_push(arr, &a))
+        printf("Apartment added at position #%d\n", arr->count - 1);
+}
+
+/*Fill N apartments sequentially*/
+void menu_fill_n(ApartmentArray *arr) {
+    printf("\nFill N Apartments\n");
+    int n = input_int("How many apartments to add? ");
+    if (n <= 0) { printf("Invalid number.\n"); return; }
+
+    /* Expand once for all N slots (single malloc) */
+    if (!array_expand(arr, n)) return;
+    printf("[i] Memory allocated for %d additional apartments.\n\n", n);
+
+    for (int i = 0; i < n; i++) {
+        printf("Apartment #%d \n", arr->count);
+        Apartment a;
+        input_apartment(&a);
+        array_push(arr, &a);
+        printf("  [+] Added at position #%d.\n\n", arr->count - 1);
+    }
+}
+
+/*Edit a single field by index*/
+void menu_edit(ApartmentArray *arr) {
+    printf("\nEdit Apartment\n");
+    if (arr->count == 0) { printf("  [!] List is empty.\n"); return; }
+
+    int idx = input_int("Apartment index: ");
+    if (idx < 0 || idx >= arr->count) {
+        printf("  [!] Invalid index (0..%d).\n", arr->count - 1); return;
+    }
+    print_apartment(idx, &arr->data[idx]);
+
+    printf("Select field to edit:\n"
+           "  1. Address\n"
+           "  2. Number of rooms\n"
+           "  3. Area\n"
+           "  4. Rent\n"
+           "  0. Cancel\n");
+
+    int f = input_int("Your choice: ");
+    Apartment *a = &arr->data[idx];
+    switch (f) {
+        case 1:
+            input_string("New address: ", a->address, MAX_ADDRESS_LEN);
+            printf("[+]Address updated.\n"); break;
+        case 2:
+            a->rooms = input_int("New number of rooms: ");
+            printf("[+]Rooms updated.\n"); break;
+        case 3:
+            a->area = input_float("New area (sqm):");
+            printf("[+]Area updated.\n"); break;
+        case 4:
+            a->rent = input_float("New rent:");
+            printf("[+]Rent updated.\n"); break;
+        case 0:
+            printf("Cancelled.\n"); break;
+        default:
+            printf("[!]Invalid choice.\n");
+    }
+}
+
+/*Search by criterion*/
+void menu_search(const ApartmentArray *arr) {
+    printf("\n=== Search Apartments ===\n");
+    printf("  1. By address (substring)\n"
+           "  2. By number of rooms\n"
+           "  3. Maximum rent\n"
+           "  4. Minimum area\n");
+    int choice = input_int("Criterion: ");
+    int found  = 0;
+    printf("\nSearch Results\n");
+
+    if (choice == 1) {
+        char kw[MAX_ADDRESS_LEN];
+        input_string("Address keyword: ", kw, MAX_ADDRESS_LEN);
+        for (int i = 0; i < arr->count; i++)
+            if (strstr(arr->data[i].address, kw)) {
+                print_apartment(i, &arr->data[i]); found++; }
+    } else if (choice == 2) {
+        int r = input_int("Number of rooms: ");
+        for (int i = 0; i < arr->count; i++)
+            if (arr->data[i].rooms == r) {
+                print_apartment(i, &arr->data[i]); found++; }
+    } else if (choice == 3) {
+        float mx = input_float("Maximum rent: ");
+        for (int i = 0; i < arr->count; i++)
+            if (arr->data[i].rent <= mx) {
+                print_apartment(i, &arr->data[i]); found++; }
+    } else if (choice == 4) {
+        float mn = input_float("Minimum area (sqm): ");
+        for (int i = 0; i < arr->count; i++)
+            if (arr->data[i].area >= mn) {
+                print_apartment(i, &arr->data[i]); found++; }
+    } else {
+        printf("[!]Invalid choice.\n"); return;
+    }
+
+    if (!found) printf("No apartments match the given criteria.\n");
+    printf("\n");
+}
+
+/*Remove the last element*/
+void menu_pop(ApartmentArray *arr) {
+    printf("\n=== Remove Last Apartment ===\n");
+    if (arr->count == 0) { printf("  [!] List is empty.\n"); return; }
+    printf("This apartment will be removed (#%d):\n", arr->count - 1);
+    print_apartment(arr->count - 1, &arr->data[arr->count - 1]);
+    int ok = input_int("Confirm removal? (1=yes / 0=no): ");
+    if (!ok) { printf("Cancelled.\n"); return; }
+    if (array_pop(arr))
+        printf("[+] Removed. Count: %d, capacity: %d.\n",
+               arr->count, arr->capacity);
+}
+
+/*Manually expand the array by N slots*/
+void menu_expand(ApartmentArray *arr) {
+    printf("\nExpand Array\n");
+    int n = input_int("How many slots to add? ");
+    if (n <= 0) { printf("[!]Invalid value.\n"); return; }
+    if (array_expand(arr, n))
+        printf("[+]Capacity increased to %d slots (used: %d).\n",
+               arr->capacity, arr->count);
+}
+
+/*Clear the list and free all memory*/
+void menu_clear(ApartmentArray *arr) {
+    printf("\nClear List\n");
+    if (arr->count == 0 && arr->capacity == 0) {
+        printf("  List is already empty.\n"); return;
+    }
+    int ok = input_int("Delete ALL records and free memory? (1=yes / 0=no): ");
+    if (!ok) { printf("Cancelled.\n"); return; }
+    array_free(arr);
+}
+
+/*Show memory state*/
+void menu_memory_info(const ApartmentArray *arr) {
+    printf("\n=== Memory Info ===\n");
+    printf("Elements in list: %d\n",   arr->count);
+    printf("Allocated slots: %d\n",   arr->capacity);
+    printf("Free slots: %d\n",   arr->capacity - arr->count);
+    printf("Block size: %lu bytes\n",
+           (unsigned long)(arr->capacity * sizeof(Apartment)));
+    printf("Block address: %p\n\n", (void *)arr->data);
+}
+
+/*MAIN*/
+int main(void) {
+    ApartmentArray list;
+    array_init(&list);
+
+    printf("Apartment Management System  v2.0\n");
+    printf("Dynamic array - no realloс\n");
+
+    int running = 1;
+    while (running) {
+        printf("\nMain Menu\n");
+        printf("Data Operations\n");
+        printf("1. Add apartment to end of list\n");
+        printf("2. Fill N apartments sequentially\n");
+        printf("3. Display all apartments\n");
+        printf("4. Edit apartment by index (field by field)\n");
+        printf("5. Search apartments by criterion\n");
+        printf("Memory Management\n");
+        printf("6. Remove last apartment\n");
+        printf("7. Expand array by N slots\n");
+        printf("8. Clear list and free all memory\n");
+        printf("9. Memory info\n");
+        printf("0. Exit (frees memory automatically)\n");
+
+        int choice = input_int("Your choice: ");
 
         switch (choice) {
-            case 1: {
-                Apartment apt = input_apartment();
-                if (push_back(&arr, apt))
-                    printf("Kvartira dobavlena. Razmer massiva: %d\n", arr.size);
-                break;
-            }
-            case 2: {
-                if (pop_back(&arr))
-                    printf("Poslednyaya kvartira udalena. Razmer massiva: %d\n", arr.size);
-                break;
-            }
-            case 3: {
-                int count;
-                printf("Na skolko elementov rasshirit massiv? ");
-                scanf("%d", &count);
-                while (getchar() != '\n');
-                if (expand_array(&arr, count))
-                    printf("Massiv rasshiren. Novyy razmer: %d\n", arr.size);
-                break;
-            }
-            case 4:
-                print_all(&arr);
-                break;
-            case 5:
-                clear_array(&arr);
-                break;
-            case 0:
-                printf("Zavershenie programmy...\n");
-                break;
-            default:
-                printf("Nevernyy vybor. Poprobuite snova.\n");
+            case 1: menu_add_to_end(&list);  break;
+            case 2: menu_fill_n(&list);      break;
+            case 3: display_all(&list);      break;
+            case 4: menu_edit(&list);        break;
+            case 5: menu_search(&list);      break;
+            case 6: menu_pop(&list);         break;
+            case 7: menu_expand(&list);      break;
+            case 8: menu_clear(&list);       break;
+            case 9: menu_memory_info(&list); break;
+            case 0: running = 0;             break;
+            default: printf("  [!] Invalid choice. Try again.\n");
         }
-    } while (choice != 0);
+    }
 
-    /* Osvobozhdaem pamyat pered zaversheniem */
-    clear_array(&arr);
+    /* Free all memory before exit */
+    printf("\n=== Shutting down ===\n");
+    array_free(&list);
+    printf("Goodbye!\n");
     return 0;
 }
