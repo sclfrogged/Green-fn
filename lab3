@@ -1,0 +1,469 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_ADRES_LEN 200
+
+/* STRUKTURA */
+typedef struct {
+    char  adres[MAX_ADRES_LEN];
+    int   komnaty;
+    float ploschad;
+    float arenda;
+} Kvartira;
+
+/* DINAMICHESKIY MASSIV */
+typedef struct {
+    Kvartira *dannye;
+    int       kolichestvo;
+    int       vmestimost;
+} MassivKvartir;
+
+void massiv_init(MassivKvartir *m) {
+    m->dannye      = NULL;
+    m->kolichestvo = 0;
+    m->vmestimost  = 0;
+}
+
+/*Rasshirit massiv na dopolnitelnye sloty. BEZ realloc - novyy blok, kopirovanie, osvobozhdenie starogo*/
+int massiv_rasshirit(MassivKvartir *m, int dop_sloty) {
+    if (dop_sloty <= 0) return 1;
+
+    int novaya_vmestimost = m->vmestimost + dop_sloty;
+
+    Kvartira *novye_dannye = (Kvartira *)malloc(sizeof(Kvartira) * novaya_vmestimost);
+    if (!novye_dannye) {
+        printf("Oshibka: ne udalos vydelit pamyat.\n");
+        return 0;
+    }
+
+    if (m->dannye && m->kolichestvo > 0)
+        memcpy(novye_dannye, m->dannye, sizeof(Kvartira) * m->kolichestvo);
+
+    free(m->dannye);
+    m->dannye     = novye_dannye;
+    m->vmestimost = novaya_vmestimost;
+    return 1;
+}
+
+/* Dobavit v konec (avtomaticheski rasshiryaet esli nuzno) */
+int massiv_dobavit(MassivKvartir *m, const Kvartira *kv) {
+    if (m->kolichestvo >= m->vmestimost) {
+        if (!massiv_rasshirit(m, 1)) return 0;
+    }
+    m->dannye[m->kolichestvo] = *kv;
+    m->kolichestvo++;
+    return 1;
+}
+
+/*Udalit posledniy element i umenshit blok pamyati. BEZ realloc - kopirovat v novyy menshiy blok, osvobodit staryy*/
+int massiv_udalit_posledniy(MassivKvartir *m) {
+    if (m->kolichestvo == 0) {
+        printf("Massiv pust - necego udalyat.\n");
+        return 0;
+    }
+    m->kolichestvo--;
+    int novaya_vmestimost = m->kolichestvo;
+
+    if (novaya_vmestimost == 0) {
+        free(m->dannye);
+        m->dannye     = NULL;
+        m->vmestimost = 0;
+        return 1;
+    }
+
+    Kvartira *novye_dannye = (Kvartira *)malloc(sizeof(Kvartira) * novaya_vmestimost);
+    if (!novye_dannye) {
+        printf("Preduprezhdenie: ne udalos szhit blok pamyati.\n");
+        m->vmestimost = novaya_vmestimost;
+        return 1;
+    }
+    memcpy(novye_dannye, m->dannye, sizeof(Kvartira) * novaya_vmestimost);
+    free(m->dannye);
+    m->dannye     = novye_dannye;
+    m->vmestimost = novaya_vmestimost;
+    return 1;
+}
+
+/* Ochistit ves spisok i osvobodit vsyu pamyat */
+void massiv_ochistit(MassivKvartir *m) {
+    free(m->dannye);
+    m->dannye      = NULL;
+    m->kolichestvo = 0;
+    m->vmestimost  = 0;
+    printf("Pamyat osvobozhdena. Spisok ochischen.\n");
+}
+
+/*
+ * NOVOE v3: Vstavit na poziciyu.
+ * BEZ realloc - novyy blok, kopirovanie chastey, osvobozhdenie starogo.
+ */
+int massiv_vstavit(MassivKvartir *m, int poziciya, const Kvartira *kv) {
+    if (poziciya < 0 || poziciya > m->kolichestvo) {
+        printf("Nevernaya poziciya (0..%d).\n", m->kolichestvo);
+        return 0;
+    }
+
+    int novaya_vmestimost = m->vmestimost + 1;
+    Kvartira *novye_dannye = (Kvartira *)malloc(sizeof(Kvartira) * novaya_vmestimost);
+    if (!novye_dannye) {
+        printf("Oshibka: ne udalos vydelit pamyat.\n");
+        return 0;
+    }
+
+    if (poziciya > 0)
+        memcpy(novye_dannye, m->dannye, sizeof(Kvartira) * poziciya);
+
+    novye_dannye[poziciya] = *kv;
+
+    if (poziciya < m->kolichestvo)
+        memcpy(novye_dannye + poziciya + 1, m->dannye + poziciya,
+               sizeof(Kvartira) * (m->kolichestvo - poziciya));
+
+    free(m->dannye);
+    m->dannye      = novye_dannye;
+    m->kolichestvo++;
+    m->vmestimost  = novaya_vmestimost;
+    return 1;
+}
+
+/*NOVOE v3: Udalit po indexu so sdvigom vlevo.BEZ realloc - novyy umenshenyy blok, kopirovanie, osvobozhdenie.*/
+int massiv_udalit_po_indexu(MassivKvartir *m, int index) {
+    if (index < 0 || index >= m->kolichestvo) {
+        printf("Nevernyy index (0..%d).\n", m->kolichestvo - 1);
+        return 0;
+    }
+
+    int novaya_vmestimost = m->kolichestvo - 1;
+
+    if (novaya_vmestimost == 0) {
+        free(m->dannye);
+        m->dannye      = NULL;
+        m->kolichestvo = 0;
+        m->vmestimost  = 0;
+        return 1;
+    }
+
+    Kvartira *novye_dannye = (Kvartira *)malloc(sizeof(Kvartira) * novaya_vmestimost);
+    if (!novye_dannye) {
+        printf("Oshibka: ne udalos vydelit pamyat.\n");
+        return 0;
+    }
+
+    if (index > 0)
+        memcpy(novye_dannye, m->dannye, sizeof(Kvartira) * index);
+
+    if (index < m->kolichestvo - 1)
+        memcpy(novye_dannye + index, m->dannye + index + 1,
+               sizeof(Kvartira) * (m->kolichestvo - index - 1));
+
+    free(m->dannye);
+    m->dannye      = novye_dannye;
+    m->kolichestvo = novaya_vmestimost;
+    m->vmestimost  = novaya_vmestimost;
+    return 1;
+}
+
+/* NOVOE v3: Sortirovka puzyrkom po vybrannomu polyu */
+void massiv_sortirovka(MassivKvartir *m, int pole) {
+    for (int i = 0; i < m->kolichestvo - 1; i++) {
+        for (int j = 0; j < m->kolichestvo - i - 1; j++) {
+            int zamena = 0;
+            Kvartira *a = &m->dannye[j];
+            Kvartira *b = &m->dannye[j + 1];
+
+            if      (pole == 1) zamena = strcmp(a->adres, b->adres) > 0;
+            else if (pole == 2) zamena = a->komnaty > b->komnaty;
+            else if (pole == 3) zamena = a->ploschad > b->ploschad;
+            else if (pole == 4) zamena = a->arenda   > b->arenda;
+
+            if (zamena) {
+                Kvartira tmp = *a;
+                *a = *b;
+                *b = tmp;
+            }
+        }
+    }
+}
+
+/* VVOD */
+void vvod_stroku(const char *podskazka, char *bufer, int max_dlin) {
+    printf("%s", podskazka);
+    fflush(stdout);
+    if (fgets(bufer, max_dlin, stdin)) {
+        size_t n = strlen(bufer);
+        if (n > 0 && bufer[n - 1] == '\n') bufer[n - 1] = '\0';
+    }
+}
+
+int vvod_int(const char *podskazka) {
+    int v;
+    char stroka[64];
+    while (1) {
+        printf("%s", podskazka);
+        fflush(stdout);
+        if (fgets(stroka, sizeof(stroka), stdin))
+            if (sscanf(stroka, "%d", &v) == 1) return v;
+        printf("Oshibka vvoda. Vvedite celoe chislo.\n");
+    }
+}
+
+float vvod_float(const char *podskazka) {
+    float v;
+    char stroka[64];
+    while (1) {
+        printf("%s", podskazka);
+        fflush(stdout);
+        if (fgets(stroka, sizeof(stroka), stdin))
+            if (sscanf(stroka, "%f", &v) == 1) return v;
+        printf("Oshibka vvoda. Vvedite chislo.\n");
+    }
+}
+
+void vvod_kvartiru(Kvartira *kv) {
+    vvod_stroku("Adres: ", kv->adres, MAX_ADRES_LEN);
+    kv->komnaty  = vvod_int  ("Kolichestvo komnat: ");
+    kv->ploschad = vvod_float("Ploschad (kv.m): ");
+    kv->arenda   = vvod_float("Stoimost arendy (rub): ");
+}
+
+/* VYVOD */
+void vivesti_kvartiru(int index, const Kvartira *kv) {
+    printf("Kvartira #%d\n", index);
+    printf("Adres: %s\n", kv->adres);
+    printf("Komnat: %d\n", kv->komnaty);
+    printf("Ploschad: %.2f kv.m\n", kv->ploschad);
+    printf("Arenda: %.2f rub\n", kv->arenda);
+    printf("---\n");
+}
+
+void vivesti_vse(const MassivKvartir *m) {
+    printf("\nSpisok kvartir (vsego: %d, vmestimost: %d)\n",
+           m->kolichestvo, m->vmestimost);
+    if (m->kolichestvo == 0) { printf("(spisok pust)\n\n"); return; }
+    for (int i = 0; i < m->kolichestvo; i++)
+        vivesti_kvartiru(i, &m->dannye[i]);
+    printf("\n");
+}
+
+/* MENYU - DEYSTVIYA v2 */
+
+void menyu_dobavit_v_konec(MassivKvartir *m) {
+    printf("\nDobavit kvartiru v konec\n");
+    Kvartira kv;
+    vvod_kvartiru(&kv);
+    if (massiv_dobavit(m, &kv))
+        printf("[+] Kvartira dobavlena na poziciu #%d\n", m->kolichestvo - 1);
+}
+
+void menyu_zapolnit_n(MassivKvartir *m) {
+    printf("\nZapolnit N kvartir\n");
+    int n = vvod_int("Skolko kvartir dobavit? ");
+    if (n <= 0) { printf("Nekorrektnoe kolichestvo.\n"); return; }
+    if (!massiv_rasshirit(m, n)) return;
+    printf("Pamyat vydelena dlya %d kvartir.\n\n", n);
+    for (int i = 0; i < n; i++) {
+        printf("Kvartira #%d\n", m->kolichestvo);
+        Kvartira kv;
+        vvod_kvartiru(&kv);
+        massiv_dobavit(m, &kv);
+        printf("[+] Dobavlena na poziciu #%d.\n\n", m->kolichestvo - 1);
+    }
+}
+
+void menyu_redaktirovat(MassivKvartir *m) {
+    printf("\nRedaktirovat kvartiru\n");
+    if (m->kolichestvo == 0) { printf("Spisok pust.\n"); return; }
+    int idx = vvod_int("Index kvartiry: ");
+    if (idx < 0 || idx >= m->kolichestvo) {
+        printf("Nevernyy index (0..%d).\n", m->kolichestvo - 1); return;
+    }
+    vivesti_kvartiru(idx, &m->dannye[idx]);
+    printf("Vyberi pole:\n1. Adres\n2. Komnaty\n3. Ploschad\n4. Arenda\n0. Otmena\n");
+    int f = vvod_int("Vybor: ");
+    Kvartira *kv = &m->dannye[idx];
+    switch (f) {
+        case 1: vvod_stroku("Novyy adres: ", kv->adres, MAX_ADRES_LEN);
+                printf("[+] Adres obnovlen.\n"); break;
+        case 2: kv->komnaty = vvod_int("Novoe kolichestvo komnat: ");
+                printf("[+] Komnaty obnovleny.\n"); break;
+        case 3: kv->ploschad = vvod_float("Novaya ploschad (kv.m): ");
+                printf("[+] Ploschad obnovlena.\n"); break;
+        case 4: kv->arenda = vvod_float("Novaya arenda (rub): ");
+                printf("[+] Arenda obnovlena.\n"); break;
+        case 0: printf("Otmena.\n"); break;
+        default: printf("Nevernyy vybor.\n");
+    }
+}
+
+void menyu_poisk(const MassivKvartir *m) {
+    printf("\nPoisk kvartir\n");
+    printf("1. Po adresu (podstroka)\n2. Po kolichestvu komnat\n"
+           "3. Maksimalnaya arenda\n4. Minimalnaya ploschad\n");
+    int vybor = vvod_int("Kriteriy: ");
+    int naydeno = 0;
+    printf("\nRezultaty poiska\n");
+    if (vybor == 1) {
+        char kl[MAX_ADRES_LEN];
+        vvod_stroku("Klyuchevoe slovo adresa: ", kl, MAX_ADRES_LEN);
+        for (int i = 0; i < m->kolichestvo; i++)
+            if (strstr(m->dannye[i].adres, kl)) {
+                vivesti_kvartiru(i, &m->dannye[i]); naydeno++; }
+    } else if (vybor == 2) {
+        int r = vvod_int("Kolichestvo komnat: ");
+        for (int i = 0; i < m->kolichestvo; i++)
+            if (m->dannye[i].komnaty == r) {
+                vivesti_kvartiru(i, &m->dannye[i]); naydeno++; }
+    } else if (vybor == 3) {
+        float mx = vvod_float("Maksimalnaya arenda: ");
+        for (int i = 0; i < m->kolichestvo; i++)
+            if (m->dannye[i].arenda <= mx) {
+                vivesti_kvartiru(i, &m->dannye[i]); naydeno++; }
+    } else if (vybor == 4) {
+        float mn = vvod_float("Minimalnaya ploschad: ");
+        for (int i = 0; i < m->kolichestvo; i++)
+            if (m->dannye[i].ploschad >= mn) {
+                vivesti_kvartiru(i, &m->dannye[i]); naydeno++; }
+    } else { printf("Nevernyy vybor.\n"); return; }
+    if (!naydeno) printf("Kvartiry ne naydeny.\n");
+    printf("\n");
+}
+
+void menyu_udalit_posledniy(MassivKvartir *m) {
+    printf("\nUdalit poslednyuyu kvartiru\n");
+    if (m->kolichestvo == 0) { printf("Spisok pust.\n"); return; }
+    printf("Budet udalena kvartira #%d:\n", m->kolichestvo - 1);
+    vivesti_kvartiru(m->kolichestvo - 1, &m->dannye[m->kolichestvo - 1]);
+    int ok = vvod_int("Podtverdit udalenie? (1=da / 0=net): ");
+    if (!ok) { printf("Otmena.\n"); return; }
+    if (massiv_udalit_posledniy(m))
+        printf("[+] Udaleno. Kolichestvo: %d, vmestimost: %d.\n",
+               m->kolichestvo, m->vmestimost);
+}
+
+void menyu_rasshirit(MassivKvartir *m) {
+    printf("\nRasshirit massiv\n");
+    int n = vvod_int("Na skolko slotov rasshirit? ");
+    if (n <= 0) { printf("Nekorrektnoe znachenie.\n"); return; }
+    if (massiv_rasshirit(m, n))
+        printf("[+] Vmestimost uvelichena do %d slotov (zanyato: %d).\n",
+               m->vmestimost, m->kolichestvo);
+}
+
+void menyu_ochistit(MassivKvartir *m) {
+    printf("\nOchistit spisok\n");
+    if (m->kolichestvo == 0 && m->vmestimost == 0) {
+        printf("Spisok uzhe pust.\n"); return;
+    }
+    int ok = vvod_int("Udalit VSE zapisi i osvobodit pamyat? (1=da / 0=net): ");
+    if (!ok) { printf("Otmena.\n"); return; }
+    massiv_ochistit(m);
+}
+
+void menyu_info_pamyati(const MassivKvartir *m) {
+    printf("\nInformaciya o pamyati\n");
+    printf("Elementov v spiske: %d\n", m->kolichestvo);
+    printf("Vydeleno slotov: %d\n", m->vmestimost);
+    printf("Svobodnyh slotov: %d\n", m->vmestimost - m->kolichestvo);
+    printf("Razmer bloka: %lu bayt\n", (unsigned long)(m->vmestimost * sizeof(Kvartira)));
+    printf("Adres bloka: %p\n\n", (void *)m->dannye);
+}
+
+/* MENYU - DEYSTVIYA v3 */
+
+void menyu_sortirovka(MassivKvartir *m) {
+    printf("\nSortirovka kvartir\n");
+    if (m->kolichestvo < 2) { printf("Nedostatochno elementov.\n"); return; }
+    printf("Sortirovat po:\n1. Adresu (A-Ya)\n2. Kolichestvu komnat\n"
+           "3. Ploshadi\n4. Arende\n");
+    int f = vvod_int("Vybor: ");
+    if (f < 1 || f > 4) { printf("Nevernyy vybor.\n"); return; }
+    massiv_sortirovka(m, f);
+    printf("[+] Spisok otsortirovan.\n");
+    vivesti_vse(m);
+}
+
+void menyu_vstavit(MassivKvartir *m) {
+    printf("\nVstavit kvartiru na poziciu\n");
+    if (m->kolichestvo == 0)
+        printf("Spisok pust - element vstavitsya na poziciu 0.\n");
+    else
+        printf("Dopustimye pozicii: 0..%d\n", m->kolichestvo);
+    int poz = vvod_int("Vstavit na poziciu: ");
+    Kvartira kv;
+    vvod_kvartiru(&kv);
+    if (massiv_vstavit(m, poz, &kv))
+        printf("[+] Kvartira vstavlena na poziciu #%d. Vsego: %d\n",
+               poz, m->kolichestvo);
+}
+
+void menyu_udalit_po_indexu(MassivKvartir *m) {
+    printf("\nUdalit kvartiru po indexu\n");
+    if (m->kolichestvo == 0) { printf("Spisok pust.\n"); return; }
+    vivesti_vse(m);
+    int idx = vvod_int("Vvedite index dlya udaleniya: ");
+    if (idx < 0 || idx >= m->kolichestvo) {
+        printf("Nevernyy index (0..%d).\n", m->kolichestvo - 1); return;
+    }
+    printf("Budet udalena:\n");
+    vivesti_kvartiru(idx, &m->dannye[idx]);
+    int ok = vvod_int("Podtverdit? (1=da / 0=net): ");
+    if (!ok) { printf("Otmena.\n"); return; }
+    if (massiv_udalit_po_indexu(m, idx))
+        printf("[+] Udaleno. Kolichestvo: %d, vmestimost: %d.\n",
+               m->kolichestvo, m->vmestimost);
+}
+
+/* GLAVNAYA FUNKCIYA */
+int main(void) {
+    MassivKvartir spisok;
+    massiv_init(&spisok);
+
+    printf("Sistema ucheta kvartir v3.0\n");
+    printf("Dinamicheskiy massiv | sortirovka | vstavka | udalenie\n");
+
+    int rabota = 1;
+    while (rabota) {
+        printf("\n!Glavnoe menyu\n");
+        printf("Rabota s dannymi:\n");
+        printf("1.Dobavit kvartiru v konec\n");
+        printf("2.Zapolnit N kvartir\n");
+        printf("3.Vivesti vse kvartiry\n");
+        printf("4.Redaktirovat kvartiru po indexu\n");
+        printf("5.Poisk kvartiry po kriteriyu\n");
+        printf("Novoe v v3:\n");
+        printf("6.Sortirovka po polyu\n");
+        printf("7.Vstavit na poziciu\n");
+        printf("8.Udalit po indexu\n");
+        printf("Upravlenie pamyatyu:\n");
+        printf("9.Udalit poslednyuyu kvartiru\n");
+        printf("10.Rasshirit massiv na N slotov\n");
+        printf("11.Ochistit spisok i osvobodit pamyat\n");
+        printf("12.Informaciya o pamyati\n");
+        printf("0.Vyhod\n");
+
+        int vybor = vvod_int("Vash vybor: ");
+
+        switch (vybor) {
+            case 1:  menyu_dobavit_v_konec(&spisok);break;
+            case 2:  menyu_zapolnit_n(&spisok);break;
+            case 3:  vivesti_vse(&spisok);break;
+            case 4:  menyu_redaktirovat(&spisok);break;
+            case 5:  menyu_poisk(&spisok);break;
+            case 6:  menyu_sortirovka(&spisok);break;
+            case 7:  menyu_vstavit(&spisok);break;
+            case 8:  menyu_udalit_po_indexu(&spisok);break;
+            case 9:  menyu_udalit_posledniy(&spisok);break;
+            case 10: menyu_rasshirit(&spisok);break;
+            case 11: menyu_ochistit(&spisok);break;
+            case 12: menyu_info_pamyati(&spisok);break;
+            case 0:  rabota = 0;break;
+            default: printf("Nevernyy vybor. Poprobuy snova.\n");
+        }
+    }
+
+    printf("\nZavershenie programmy...\n");
+    massiv_ochistit(&spisok);
+    printf("Do svidaniya\n");
+    return 0;
+}
